@@ -2,6 +2,18 @@ import sourceInfo from "./data/stateData.geojson" assert { type: "json" };
 import nycRace from "./data/ethnicity.json" assert { type: "json" };
 import nycData from "./data/community_boards.json" assert { type: "json" };
 
+// fetch the data from the philly 311 api
+// async function getData() {
+//   const response = await fetch(
+//     "https://phl.carto.com/api/v2/sql?format=GeoJSON&q=SELECT * FROM public_cases_fc WHERE requested_datetime >= current_date - 7"
+//   );
+//   const data = await response.json();
+//   console.log(data);
+//   return data;
+// }
+
+// getData();
+
 // number of bins for your legend
 const numberOfBins = 6;
 
@@ -63,7 +75,6 @@ function getQuantileScale(jsonSource, prop) {
    * @param {string} prop - the property to be used for the scale
    */
 
-  console.log(jsonSource, prop);
   const data = jsonSource.features
     .map((state) => state.properties[prop])
     .sort((a, b) => a - b);
@@ -191,7 +202,9 @@ const map = new mapboxgl.Map({
   //   zoom: 4, // Starting zoom level
   projection: "globe",
   //   center on new york city
-  center: [-74.006, 40.7128],
+  //   center: [-74.006, 40.7128],
+  //   center on philadelphia
+  center: [-75.1638, 39.9526],
   zoom: 10,
 });
 
@@ -237,7 +250,7 @@ map.on("load", () => {
         "case",
         ["boolean", ["feature-state", "hover"], false],
         0.8,
-        0.5,
+        0.3,
       ],
     },
   });
@@ -281,15 +294,137 @@ map.on("load", () => {
         "interpolate",
         ["linear"],
         ["zoom"],
-        10,
-        0,
         11,
+        0,
+        12,
         0.5,
-        13,
+        14,
         1,
       ],
     },
   });
+
+  fetch(
+    "https://phl.carto.com/api/v2/sql?format=GeoJSON&q=SELECT * FROM public_cases_fc WHERE requested_datetime >= current_date - 14"
+  )
+    .then((response) => response.json())
+    .then((data) => {
+      const responseTypes = {};
+      const philly311 = data.features.filter(
+        (d) => d.geometry !== null && d.properties.subject !== null
+      );
+
+      philly311.forEach((d) => {
+        d.properties.subject = d.properties.subject.toUpperCase();
+
+        if (responseTypes[d.properties.subject]) {
+          responseTypes[d.properties.subject] += 1;
+        } else {
+          responseTypes[d.properties.subject] = 1;
+        }
+      });
+
+      //   create a function to get the top 10 responses
+      function getTopTenResponses(data) {
+        const complaintArray = Object.entries(data).sort((a, b) => b[1] - a[1]);
+
+        //   return array to object
+        const responseTypesObject = complaintArray.reduce(
+          (obj, [key, value]) => {
+            obj[key] = value;
+            return obj;
+          },
+          {}
+        );
+
+        const topTen = Object.entries(data)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 10)
+          .reduce((obj, [key, value]) => {
+            obj[key] = value;
+            return obj;
+          }, {});
+        return topTen;
+      }
+
+      data.features = philly311;
+      map.addSource("philly311", {
+        type: "geojson",
+        data: data,
+      });
+
+      map.addLayer({
+        id: "philly311Circles",
+        type: "circle",
+        source: "philly311",
+        layout: {},
+        paint: {
+          // set circle radius based on zoom
+          "circle-radius": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            10,
+            0,
+            11,
+            1,
+            12,
+            2,
+            14,
+            7,
+          ],
+
+          "circle-pitch-scale": "viewport",
+          //   filter color based on status and then display as categorical data
+          //   "circle-color":
+          //     //   if the status is closed
+          //     ["case", ["==", ["get", "status"], "Closed"], "blue", "red"],
+
+          // assign circle color based on the subject of the complaint
+          "circle-color": [
+            "match",
+            ["get", "subject"],
+            "MAINTENANCE COMPLAINT",
+            "rgb(244, 133, 0)",
+            "ILLEGAL DUMPING",
+            "rgb(29, 168, 39)",
+            "ABANDONED AUTOMOBILE",
+            "rgb(80, 128, 234)",
+            "ABANDONED VEHICLE",
+            "rgb(80, 128, 234)",
+            "RUBBISH/RECYCLABLE MATERIAL COLLECTION",
+            "rgb(128, 63, 138)",
+            "GRAFFITI REMOVAL",
+            "rgb(252, 75, 56)",
+            "CONSTRUCTION COMPLAINTS",
+            "rgb(128, 63, 138)",
+            "RUBBISH COLLECTION",
+            "rgb(128, 63, 138)",
+            "POTHOLE REPAIR",
+            "rgb(252, 75, 56)",
+            "STREET LIGHT OUTAGE",
+            "rgb(128, 63, 138)",
+            "rgba(33, 33, 33, 125)", //fallback for other
+          ],
+          //   change the stroke color based on the status
+          "circle-stroke-color": [
+            "match",
+            ["get", "status"],
+            "Closed",
+            "rgb(30,30,30)", //closed tickets
+            "white", //open tickets
+          ],
+          //   set the stroke width based on the hover state
+          "circle-stroke-width": [
+            "case",
+            ["boolean", ["feature-state", "hover"], false],
+            3,
+            1,
+          ],
+        },
+      });
+    });
+
   // create legend
   const legend = document.getElementById("legend");
   const [legendValues, legendColors] = [
@@ -312,15 +447,74 @@ map.on("load", () => {
 
   map.on("mousemove", (event) => {
     const bounds = map.queryRenderedFeatures(event.point, {
-      layers: ["nycPoverty"],
+      layers: ["philly311Circles"],
     });
 
-    if (bounds.length > 0 && bounds[0].properties.Data_YN === "Y") {
-      document.getElementById("pd").innerHTML = bounds.length
-        ? `<h3>${bounds[0].properties.CDTAName}</h3><p><strong><em>${round(
-            bounds[0].properties.F12_PvtyPc
-          )}%</strong> of people are living below the povert line.</em></p>`
-        : `<p>Hover over a community board!</p>`;
+    if (bounds.length > 0) {
+      const { subject, status, requested_datetime, address } =
+        bounds[0].properties;
+      document.getElementById(
+        "pd"
+      ).innerHTML = `<h3>${address}</h3><p><strong><em>${subject}</strong><p>Status: ${status}</p><p>${requested_datetime}</p></em></p>`;
     }
   });
 });
+
+let hoveredStateId = null;
+
+// change point opacity of philly311 on hover
+map.on("mousemove", "philly311Circles", (e, index) => {
+  if (e.features.length > 0) {
+    if (hoveredStateId) {
+      map.setFeatureState(
+        { source: "philly311", id: hoveredStateId },
+        { hover: false }
+      );
+    }
+    hoveredStateId = e.features[0].properties.cartodb_id;
+    map.setFeatureState(
+      { source: "philly311", id: hoveredStateId },
+      { hover: true }
+    );
+  }
+});
+
+// When the mouse leaves the state-fill layer, update the feature state of the
+// previously hovered feature.
+map.on("mouseleave", "philly311Circles", () => {
+  if (hoveredStateId) {
+    map.setFeatureState(
+      { source: "philly311", id: hoveredStateId },
+      { hover: false }
+    );
+  }
+  hoveredStateId = null;
+});
+
+// map.on("mousemove", "nycPoverty", (e) => {
+//     if (e.features.length > 0) {
+//       if (hoveredStateId) {
+//         map.setFeatureState(
+//           { source: "nycData", id: hoveredStateId },
+//           { hover: false }
+//         );
+//       }
+//       hoveredStateId = e.features[0].id;
+//       map.setFeatureState(
+//         { source: "nycData", id: hoveredStateId },
+//         { hover: true }
+//       );
+//     }
+//   });
+
+//   // When the mouse leaves the state-fill layer, update the feature state of the
+//   // previously hovered feature.
+//   map.on("mouseleave", "nycPoverty", () => {
+//     if (hoveredStateId) {
+//       map.setFeatureState(
+//         { source: "nycData", id: hoveredStateId },
+//         { hover: false }
+//       );
+//     }
+//     hoveredStateId = null;
+//   });

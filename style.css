@@ -34,10 +34,13 @@ p {
 .map-overlay {
     position: absolute;
     right: 0;
-    background: #fff;
+    background: black;
     margin-right: 20px;
     font-family: Arial, sans-serif;
     overflow: auto;
+    color: white;
+    border: 1px solid white;
+
 }
 
 #features {

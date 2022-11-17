@@ -1,21 +1,27 @@
-import sourceInfo from "./data/stateData.geojson" assert { type: "json" };
-import nycRace from "./data/ethnicity.json" assert { type: "json" };
-import nycData from "./data/community_boards.json" assert { type: "json" };
+import phillyPopStats from "./data/Vital_Population_CT.geojson" assert { type: "json" };
 
-// fetch the data from the philly 311 api
-// async function getData() {
-//   const response = await fetch(
-//     "https://phl.carto.com/api/v2/sql?format=GeoJSON&q=SELECT * FROM public_cases_fc WHERE requested_datetime >= current_date - 7"
-//   );
-//   const data = await response.json();
-//   console.log(data);
-//   return data;
-// }
+// use turf.area to calculate the area of each of the phillypopstats
+phillyPopStats.features.forEach((d) => {
+  //   const polygon = turf.polygon([[d.geometry.coordinates[0]]]);
 
-// getData();
+  //   console.log(polygon);
+  d.properties["area_km"] = turf.area(d) / 1000;
+
+  //   console.log(d.properties.Shape__Area);
+  d.properties["POP_DENSITY"] =
+    d.properties.COUNT_ALL_RACES_ETHNICITIES / d.properties["area_km"];
+});
+
+// calculate population density for pop stats
+phillyPopStats.features.forEach((d, index) => {});
+
+//   filter out the entries whose population density is less than 1
+phillyPopStats.features = phillyPopStats.features.filter((d) => {
+  return d.properties.POP_DENSITY > 0.05;
+});
 
 // number of bins for your legend
-const numberOfBins = 6;
+const numberOfBins = 6; //max is 9
 
 let colorRamp = {
   red: [
@@ -55,14 +61,6 @@ let colorRamp = {
 
 const selectedColorRamp = colorRamp.red;
 
-// const scaleTypes = {
-//   quantile: getQuantileScale(),
-//   equalInterval: getEqualIntervalScale(),
-//   qualitative: getQualitativeScale(),
-// };
-
-// const selectedScale = scaleTypes.quantile;
-
 /**
  * CASE 1: QUANTILE SCALE:
  * Quantile slices the domain into intervals of (roughly) equal absolute frequency
@@ -76,7 +74,7 @@ function getQuantileScale(jsonSource, prop) {
    */
 
   const data = jsonSource.features
-    .map((state) => state.properties[prop])
+    .map((el) => el.properties[prop])
     .sort((a, b) => a - b);
 
   const color = d3.scaleQuantile().domain(data).range(selectedColorRamp);
@@ -113,10 +111,15 @@ function getQuantileScale(jsonSource, prop) {
  * (i.e. equal range of values for each color)
  */
 
-function getEqualIntervalScale(jsonSource) {
+function getEqualIntervalScale(jsonSource, prop) {
+  /**
+   * @param {array} jsonSource - the data source
+   * @param {string} prop - the property to be used for the scale
+   */
+
   // get density property from each state info entry
   const data = jsonSource.features
-    .map((state) => state.properties.density)
+    .map((el) => el.properties.prop)
     .sort((a, b) => a - b);
 
   const color = d3
@@ -144,34 +147,6 @@ function getEqualIntervalScale(jsonSource) {
     })
     .flat();
   return [colorScale, groups, colorBreaks];
-}
-
-// create function for qualitative data
-function getQualitativeScale(jsonSource) {
-  const data = jsonSource.features.map((state) => state.properties.race);
-
-  // get the total number of unique responses
-  const uniqueResponses = [...new Set(data)];
-
-  // create a color scale for each unique response
-  const color = d3
-    .scaleOrdinal()
-    .domain(uniqueResponses)
-    .range(colorRamp.qualitative.slice(0, uniqueResponses.length));
-
-  // get the color for each unique response
-  const colorBreaks = uniqueResponses.map((d) => color(d));
-
-  // combine density breaks and color breaks into an array of objects
-  const colorScale = uniqueResponses
-    .map((d, i) => {
-      return Object.values({
-        race: d,
-        color: colorBreaks[i],
-      });
-    })
-    .flat();
-  return [colorScale, uniqueResponses, colorBreaks];
 }
 
 //   create a function to round the number to a significant digit
@@ -221,85 +196,39 @@ map.on("style.load", () => {
 });
 
 map.on("load", () => {
-  map.addSource("nycData", {
+  //   add source for philly data
+  map.addSource("phillyPop", {
     type: "geojson",
-    data: "./data/community_boards.json",
+    data: phillyPopStats,
   });
 
+  // add layer for philly data
   map.addLayer({
-    id: "nycPoverty",
+    id: "phillyPop",
     type: "fill",
-    source: "nycData", // reference the data source
+    source: "phillyPop", // reference the data source
     layout: {},
     paint: {
-      // style the layer based on the poverty property
+      // style the layer based on POP_DENSITY property
       "fill-color": [
-        // add case for if the boundary is not part of the analysis unit
-        "case",
-        ["==", ["get", "Data_YN"], "N"],
-        "rgba(0,0,0,0)",
-        [
-          "interpolate",
-          ["linear"],
-          ["get", "F12_PvtyPc"],
-          ...getQuantileScale(nycData, "F12_PvtyPc")[0],
-        ],
-      ],
-      //   change opacity when hovering
-      "fill-opacity": [
-        "case",
-        ["boolean", ["feature-state", "hover"], false],
-        0.8,
-        0.3,
-      ],
-    },
-  });
-
-  map.addSource("ethnicity", {
-    type: "geojson",
-    data: "./data/ethnicity.json",
-  });
-
-  // Add a layer to visualize the state polygons.
-  map.addLayer({
-    id: "nycEthnicity",
-    type: "circle",
-    source: "ethnicity", // reference the data source
-    layout: {},
-    paint: {
-      //   make the circle smaller
-      "circle-radius": 2,
-      "circle-pitch-scale": "viewport",
-      // color the circle based on getQualitativeScale
-      "circle-color": [
         "interpolate",
         ["linear"],
-        ["get", "EthnicityCode"],
-        1, // hispanic
-        "rgb(244, 133, 0)",
-        2, // white
-        "rgb(29, 168, 39)",
-        3, // black
-        "rgb(80, 128, 234)",
-        4, // indigenous
-        "rgb(128, 63, 138)",
-        5, // asian
-        "rgb(252, 75, 56)",
-        6, // other
-        "rgb(128, 63, 138)",
+        ["get", "POP_DENSITY"],
+        ...getQuantileScale(phillyPopStats, "POP_DENSITY")[0],
       ],
-
       //   change opacity based on zoom level
-      "circle-opacity": [
+      "fill-opacity": [
         "interpolate",
         ["linear"],
         ["zoom"],
-        11,
+        7,
         0,
+        9,
+        0.8,
         12,
         0.5,
-        14,
-        1,
+        13,
+        0,
       ],
     },
   });
@@ -351,6 +280,7 @@ map.on("load", () => {
       map.addSource("philly311", {
         type: "geojson",
         data: data,
+        promoteId: "cartodb_id",
       });
 
       map.addLayer({
@@ -359,20 +289,9 @@ map.on("load", () => {
         source: "philly311",
         layout: {},
         paint: {
-          // set circle radius based on zoom
-          "circle-radius": [
-            "interpolate",
-            ["linear"],
-            ["zoom"],
-            10,
-            0,
-            11,
-            1,
-            12,
-            2,
-            14,
-            7,
-          ],
+          // set the circle opacity based on zoom level
+          "circle-opacity": ["interpolate", ["linear"], ["zoom"], 10, 0, 12, 1],
+
           //   change the stroke opacity based on zoom
           "circle-stroke-opacity": [
             "interpolate",
@@ -380,11 +299,7 @@ map.on("load", () => {
             ["zoom"],
             10,
             0,
-            11,
-            0.5,
             12,
-            1,
-            14,
             1,
           ],
 
@@ -432,8 +347,16 @@ map.on("load", () => {
           "circle-stroke-width": [
             "case",
             ["boolean", ["feature-state", "hover"], false],
-            3,
+            4,
             1,
+          ],
+
+          //   set the circle radius based on the hover state
+          "circle-radius": [
+            "case",
+            ["boolean", ["feature-state", "hover"], false],
+            10,
+            5,
           ],
         },
       });
@@ -441,9 +364,26 @@ map.on("load", () => {
 
   // create legend
   const legend = document.getElementById("legend");
+
+  //   create a title for the legend
+  const title = document.createElement("h2");
+  title.id = "legend-title";
+  title.textContent = "Population Density";
+  legend.appendChild(title);
+
+  //   create a child element for the legend explaining the metric
+  const description = document.createElement("p");
+  description.id = "legend-description";
+  description.textContent = "People per square km";
+  legend.appendChild(description);
+
+  //   create a container for the actual legend items
+  const ramp = document.createElement("div");
+  ramp.id = "legend-items";
+
   const [legendValues, legendColors] = [
-    getQuantileScale(nycData, "F12_PvtyPc")[1],
-    getQuantileScale(nycData, "F12_PvtyPc")[2],
+    getQuantileScale(phillyPopStats, "POP_DENSITY")[1],
+    getQuantileScale(phillyPopStats, "POP_DENSITY")[2],
   ];
   legendValues.forEach((layer, i) => {
     const color = legendColors[i];
@@ -456,9 +396,11 @@ map.on("load", () => {
     value.innerHTML = `${round(layer)}`;
     item.appendChild(key);
     item.appendChild(value);
-    legend.appendChild(item);
+    ramp.appendChild(item);
   });
+  legend.appendChild(ramp);
 
+  //   update the hover tooltip
   map.on("mousemove", (event) => {
     const bounds = map.queryRenderedFeatures(event.point, {
       layers: ["philly311Circles"],
@@ -469,23 +411,27 @@ map.on("load", () => {
         bounds[0].properties;
       document.getElementById(
         "pd"
-      ).innerHTML = `<h3>${address}</h3><p><strong><em>${subject}</strong><p>Status: ${status}</p><p>${requested_datetime}</p></em></p>`;
+      ).innerHTML = `<h3>${address}</h3><p><em>${subject}<p>Status: ${status}</p><p>${requested_datetime}</p></em></p>`;
     }
   });
 });
 
 let hoveredStateId = null;
 
-// change point opacity of philly311 on hover
-map.on("mousemove", "philly311Circles", (e, index) => {
+// change stroke width of philly311 points on hover
+
+map.on("mousemove", "philly311Circles", (e) => {
   if (e.features.length > 0) {
+    // set the cursor to pointer
+    map.getCanvas().style.cursor = "pointer";
+
     if (hoveredStateId) {
       map.setFeatureState(
         { source: "philly311", id: hoveredStateId },
         { hover: false }
       );
     }
-    hoveredStateId = e.features[0].properties.cartodb_id;
+    hoveredStateId = e.features[0].id;
     map.setFeatureState(
       { source: "philly311", id: hoveredStateId },
       { hover: true }
@@ -496,6 +442,9 @@ map.on("mousemove", "philly311Circles", (e, index) => {
 // When the mouse leaves the state-fill layer, update the feature state of the
 // previously hovered feature.
 map.on("mouseleave", "philly311Circles", () => {
+  // set the cursor to default
+  map.getCanvas().style.cursor = "";
+
   if (hoveredStateId) {
     map.setFeatureState(
       { source: "philly311", id: hoveredStateId },
@@ -505,30 +454,15 @@ map.on("mouseleave", "philly311Circles", () => {
   hoveredStateId = null;
 });
 
-// map.on("mousemove", "nycPoverty", (e) => {
-//     if (e.features.length > 0) {
-//       if (hoveredStateId) {
-//         map.setFeatureState(
-//           { source: "nycData", id: hoveredStateId },
-//           { hover: false }
-//         );
-//       }
-//       hoveredStateId = e.features[0].id;
-//       map.setFeatureState(
-//         { source: "nycData", id: hoveredStateId },
-//         { hover: true }
-//       );
-//     }
-//   });
-
-//   // When the mouse leaves the state-fill layer, update the feature state of the
-//   // previously hovered feature.
-//   map.on("mouseleave", "nycPoverty", () => {
-//     if (hoveredStateId) {
-//       map.setFeatureState(
-//         { source: "nycData", id: hoveredStateId },
-//         { hover: false }
-//       );
-//     }
-//     hoveredStateId = null;
-//   });
+// map on click fly to point
+map.on("click", "philly311Circles", (e) => {
+  // console log the current bearing
+  console.log(map.getStyle().bearing);
+  map.flyTo({
+    center: e.features[0].geometry.coordinates,
+    zoom: 18,
+    pitch: 60,
+    // get a random bearing between 0 and 360
+    bearing: Math.floor(Math.random() * 180),
+  });
+});

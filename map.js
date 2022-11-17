@@ -61,6 +61,15 @@ let colorRamp = {
 
 const selectedColorRamp = colorRamp.red;
 
+// check if device is mobile
+const mobileCheck = () => {
+  return window.innerWidth < 768;
+};
+
+const isMobile = mobileCheck();
+
+const pointScaleMultiplier = isMobile ? 3 : 1;
+
 /**
  * CASE 1: QUANTILE SCALE:
  * Quantile slices the domain into intervals of (roughly) equal absolute frequency
@@ -355,8 +364,8 @@ map.on("load", () => {
           "circle-radius": [
             "case",
             ["boolean", ["feature-state", "hover"], false],
-            10,
-            5,
+            10 * pointScaleMultiplier,
+            5 * pointScaleMultiplier,
           ],
         },
       });

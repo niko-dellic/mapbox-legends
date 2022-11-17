@@ -1,23 +1,14 @@
-import phillyPopStats from "./data/Vital_Population_CT.geojson" assert { type: "json" };
-
-// use turf.area to calculate the area of each of the phillypopstats
-phillyPopStats.features.forEach((d) => {
-  //   const polygon = turf.polygon([[d.geometry.coordinates[0]]]);
-
-  //   console.log(polygon);
-  d.properties["area_km"] = turf.area(d) / 1000;
-
-  //   console.log(d.properties.Shape__Area);
-  d.properties["POP_DENSITY"] =
-    d.properties.COUNT_ALL_RACES_ETHNICITIES / d.properties["area_km"];
-});
+import phillyPopStats from "./data/PhillyPopulation.geojson" assert { type: "json" };
 
 // calculate population density for pop stats
-phillyPopStats.features.forEach((d, index) => {});
+phillyPopStats.features.forEach((d) => {
+  d.properties["POP_DENSITY"] =
+    d.properties.COUNT_ALL_RACES_ETHNICITIES / d.properties.AreaKM;
+});
 
 //   filter out the entries whose population density is less than 1
 phillyPopStats.features = phillyPopStats.features.filter((d) => {
-  return d.properties.POP_DENSITY > 0.05;
+  return d.properties.POP_DENSITY > 100;
 });
 
 // number of bins for your legend
@@ -299,14 +290,14 @@ map.on("load", () => {
         layout: {},
         paint: {
           // set the circle opacity based on zoom level
-          "circle-opacity": ["interpolate", ["linear"], ["zoom"], 10, 0, 12, 1],
+          "circle-opacity": ["interpolate", ["linear"], ["zoom"], 11, 0, 12, 1],
 
           //   change the stroke opacity based on zoom
           "circle-stroke-opacity": [
             "interpolate",
             ["linear"],
             ["zoom"],
-            10,
+            11,
             0,
             12,
             1,
@@ -463,15 +454,46 @@ map.on("mouseleave", "philly311Circles", () => {
   hoveredStateId = null;
 });
 
+const hoverPopup = new mapboxgl.Popup({
+  closeButton: false,
+  closeOnClick: false,
+});
+
+// add a popup on hover over the population geojson
+map.on("mousemove", "phillyPop", (e) => {
+  // if the mouse is over a feature and the zoom is less than 10
+  if (e.features.length > 0 && map.getZoom() < 11) {
+    // set the cursor to pointer
+    map.getCanvas().style.cursor = "pointer";
+
+    const { POP_DENSITY } = e.features[0].properties;
+    hoverPopup
+      .setLngLat(e.lngLat)
+      .setHTML(
+        `<h3>Population Density</h3><p><em>${round(
+          POP_DENSITY
+        )} people per square km</em></p>`
+      )
+      .addTo(map);
+  }
+});
+
+// When the mouse leaves the state-fill layer, update the feature state of the
+// previously hovered feature.
+map.on("mouseleave", "phillyPop", () => {
+  // set the cursor to default
+  map.getCanvas().style.cursor = "";
+
+  hoverPopup.remove();
+});
+
 // map on click fly to point
 map.on("click", "philly311Circles", (e) => {
-  // console log the current bearing
-  console.log(map.getStyle().bearing);
   map.flyTo({
     center: e.features[0].geometry.coordinates,
     zoom: 18,
     pitch: 60,
     // get a random bearing between 0 and 360
-    bearing: Math.floor(Math.random() * 180),
+    bearing: Math.floor(Math.random() * 90),
   });
 });

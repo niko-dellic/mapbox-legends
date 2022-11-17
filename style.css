@@ -72,3 +72,15 @@ p {
     width: 50px;
     height: 30px;
 }
+
+/* change the popup style */
+.mapboxgl-popup>* {
+    background-color: black;
+    color: white;
+    border-radius: 0;
+    border: 1px solid white;
+}
+
+.mapboxgl-popup * {
+    margin: 0.25rem;
+}

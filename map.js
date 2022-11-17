@@ -275,6 +275,7 @@ map.on("load", () => {
   )
     .then((response) => response.json())
     .then((data) => {
+      console.log(data);
       // filter any null values from the data
       const philly311 = data.features.filter(
         (d) => d.geometry !== null && d.properties.subject !== null
@@ -491,11 +492,16 @@ map.on("load", () => {
     });
 
     if (bounds.length > 0) {
-      const { subject, status, requested_datetime, address } =
+      const { subject, status, requested_datetime, address, media_url } =
         bounds[0].properties;
       document.getElementById(
         "pd"
       ).innerHTML = `<h3>${address}</h3><p><em>${subject}<p>Status: ${status}</p><p>${requested_datetime}</p></em></p>`;
+      if (media_url && mobileCheck() === false) {
+        document.getElementById(
+          "pd"
+        ).innerHTML += `<img src="${media_url}" alt="image of the 311 request" />`;
+      }
     }
   });
 });

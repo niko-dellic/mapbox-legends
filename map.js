@@ -373,6 +373,20 @@ map.on("load", () => {
             14,
             7,
           ],
+          //   change the stroke opacity based on zoom
+          "circle-stroke-opacity": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            10,
+            0,
+            11,
+            0.5,
+            12,
+            1,
+            14,
+            1,
+          ],
 
           "circle-pitch-scale": "viewport",
           //   filter color based on status and then display as categorical data

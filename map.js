@@ -21,7 +21,7 @@ const map = new mapboxgl.Map({
   projection: "globe",
   //   center on philadelphia
   center: [-75.0638, 39.9926],
-  zoom: 10.75,
+  zoom: 11.25,
 });
 
 // stylize the globe effect

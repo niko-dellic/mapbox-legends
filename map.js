@@ -50,7 +50,7 @@ map.on("load", () => {
   };
 
   //   create the color value scale for the data
-  const scale = getMapScale(phillyCensus, "POP_DENSITY", scaleType.equal);
+  const scale = getMapScale(phillyCensus, "POP_DENSITY", scaleType.quantile);
 
   // add layer for philly data
   map.addLayer({
@@ -100,11 +100,11 @@ map.on("load", () => {
   ];
 
   // set the fill color of the landuse layer to based on the category
-  map.setPaintProperty("land-use", "fill-color", [
-    "match",
-    ["get", "class"],
-    ...landuseColors.flat(),
-  ]);
+  // map.setPaintProperty("land-use", "fill-color", [
+  //   "match",
+  //   ["get", "class"],
+  //   ...landuseColors.flat(),
+  // ]);
 
   // change the fill opacity of the landuse layer to 0.5
   map.setPaintProperty("land-use", "fill-opacity", 0.5);
@@ -499,6 +499,17 @@ let colorRamp = {
     "#a65628",
     "#f781bf",
     "#999999",
+  ],
+  demo: [
+    "#792BE1",
+    "#8641E2",
+    "#9457E3",
+    "#A16DE4",
+    "#AF83E5",
+    "#BD99E6",
+    "#CAAFE7",
+    "#D8C5E8",
+    "#E6DCE9",
   ],
 };
 
